@@ -1,0 +1,8 @@
+---
+- name: Test connectivity to all hosts
+  hosts: all  # This targets all hosts defined in your inventory
+  gather_facts: no # We don't need to gather facts for a simple ping
+
+  tasks:
+    - name: Ping all servers
+      ansible.builtin.ping:

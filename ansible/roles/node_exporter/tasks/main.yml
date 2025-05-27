@@ -1,0 +1,73 @@
+---
+- name: Define node_exporter version
+  ansible.builtin.set_fact:
+    node_exporter_version: "1.9.1" 
+
+- name: Check if node_exporter is already installed
+  ansible.builtin.stat:
+    path: "/usr/local/bin/node_exporter"
+  register: node_exporter_binary
+
+- name: Download and unarchive node_exporter
+  when: not node_exporter_binary.stat.exists # Only run if binary doesn't exist
+  block:
+    - name: Download node_exporter archive
+      ansible.builtin.get_url:
+        url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        mode: '0644'
+      become: yes 
+
+    - name: Unarchive node_exporter
+      ansible.builtin.unarchive:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        dest: "/tmp/"
+        remote_src: yes # Indicates that the src is on the remote machine
+      become: yes 
+
+    - name: Move node_exporter binary to /usr/local/bin
+      ansible.builtin.copy:
+        src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+        dest: "/usr/local/bin/node_exporter"
+        remote_src: yes
+        mode: '0755' # Make it executable
+        owner: root
+        group: root
+      become: yes
+
+    - name: Clean up downloaded archive and extracted folder
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+      become: yes
+  rescue: # If any task in the block fails
+    - name: Cleanup on download/unarchive failure
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+        - "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+      become: yes
+      when: node_exporter_binary.stat.exists == false # Ensure we run cleanup if needed
+
+- name: Create systemd service file for node_exporter
+  ansible.builtin.template:
+    src: node_exporter.service.j2 
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  notify: Reload and restart node_exporter 
+
+- name: Ensure node_exporter service is enabled and started
+  ansible.builtin.systemd:
+    name: node_exporter
+    enabled: yes
+    state: started
+    daemon_reload: yes # Reload systemd if the service file changed 
+  become: yes

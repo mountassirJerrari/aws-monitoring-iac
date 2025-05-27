@@ -1,0 +1,14 @@
+---
+- name: Restart Docker
+  ansible.builtin.systemd:
+    name: docker
+    state: restarted
+  become: yes
+
+# ... (Docker restart handler from above) ...
+
+- name: Restart Prometheus container
+  community.docker.docker_container:
+    name: prometheus
+    state: started      
+    restart: true      

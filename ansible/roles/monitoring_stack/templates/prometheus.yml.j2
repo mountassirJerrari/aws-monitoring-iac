@@ -1,0 +1,10 @@
+global:
+  scrape_interval: 15s # Default scrape interval
+
+scrape_configs:
+  - job_name: 'node_exporter_app_servers'
+    static_configs:
+      - targets:
+          - '10.0.1.236:9100'
+          - '10.0.1.64:9100'
+       

@@ -1,0 +1,120 @@
+---
+# Section 1: Install Docker
+- name: Install prerequisites for Docker repository
+  ansible.builtin.apt:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release # some older ubuntu might need software-properties-common instead/also
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Add Docker GPG key
+  ansible.builtin.apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+  become: yes
+
+- name: Add Docker repository
+  ansible.builtin.apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+  become: yes
+
+- name: Install Docker Engine, CLI, and Containerd
+  ansible.builtin.apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin 
+    state: present
+    update_cache: yes 
+  become: yes
+
+- name: Ensure Docker service is started and enabled
+  ansible.builtin.systemd:
+    name: docker
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Add ubuntu user to docker group to run docker without sudo (requires logout/login or new shell)
+  ansible.builtin.user:
+    name: ubuntu 
+    groups: docker
+    append: yes
+  become: yes
+  notify: Restart Docker # Sometimes helpful, or a reboot/relogin for user context
+
+
+
+# Section 2: Prometheus Setup
+- name: Create Prometheus configuration directory
+  ansible.builtin.file:
+    path: /etc/prometheus
+    state: directory
+    mode: '0755'
+  become: yes
+
+- name: Create Prometheus data directory
+  ansible.builtin.file:
+    path: /var/lib/prometheus # Or another path for persistent data
+    state: directory
+    mode: '0777' # Prometheus container needs to write here, or manage user/group
+    owner: ubuntu 
+    group: ubuntu 
+  become: yes
+
+- name: Deploy Prometheus configuration file from template
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: /etc/prometheus/prometheus.yml
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  notify: Restart Prometheus container 
+
+- name: Run Prometheus Docker container
+  community.docker.docker_container: 
+    name: prometheus
+    image: prom/prometheus:latest 
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      - "9090:9090" 
+    volumes:
+      - /etc/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro # Mount config read-only
+      - /var/lib/prometheus:/prometheus # Mount data volume
+  become: yes 
+
+# Section 3: Grafana Setup 
+
+# ... (Docker and Prometheus tasks from above) ...
+
+# Section 3: Grafana Setup
+- name: Create Grafana data directory
+  ansible.builtin.file:
+    path: /var/lib/grafana # Or another path for persistent data
+    state: directory
+    mode: '0777' 
+    owner: "472" 
+    group: "472" 
+  become: yes
+
+- name: Run Grafana Docker container
+  community.docker.docker_container:
+    name: grafana
+    image: grafana/grafana-oss:latest 
+    state: started
+    restart_policy: unless-stopped
+    ports:
+      - "3000:3000" 
+    volumes:
+      - /var/lib/grafana:/var/lib/grafana # Mount data volume
+  become: yes

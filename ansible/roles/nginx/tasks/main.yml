@@ -1,0 +1,35 @@
+---
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: yes
+  become: yes
+
+- name: Ensure Nginx service is started and enabled
+  ansible.builtin.systemd:
+    name: nginx
+    state: started
+    enabled: yes
+  become: yes
+
+- name: Create a simple Nginx index page for app1
+  ansible.builtin.copy:
+    content: |
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Welcome to App Server 1 (Nginx)!</title>
+      </head>
+      <body>
+        <h1>Success! App Server 1 with Nginx is running.</h1>
+        <p>Monitoring is awesome.</p>
+      </body>
+      </html>
+    dest: /var/www/html/index.nginx-debian.html
+    owner: root
+    group: root
+    mode: '0644'
+  become: yes
+  notify: Restart Nginx
+
